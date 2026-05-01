@@ -49,17 +49,27 @@ socket.on('connect', () => {
 
 // Escuta a telemetria do alvo vinda do servidor
 socket.on('telemetria', (dados) => {
-    const dist = parseFloat(dados.distancia);
-    const az = (parseFloat(dados.azimute) * Math.PI) / 180;
-    
-    // Atualiza posição visual do alvo
-    alvoMesh.position.x = dist * Math.sin(az);
-    alvoMesh.position.z = dist * Math.cos(az);
-    
-    // Atualiza o painel de texto para o aluno
-    const painel = document.getElementById('log-telemetria');
-    if(painel) {
-        painel.innerHTML = `🔭 TELÊMETRO: <br> Distância: ${dados.distancia}m <br> Azimute: ${dados.azimute}°`;
+
+    if (!alvoAtivo) return;
+
+    // 1. Atualização do Texto (Interface do Aluno)
+    // Agora acessamos através de dados.telemetria
+    const distParaPainel = parseFloat(dados.telemetria.distancia);
+    const aziParaPainel = dados.telemetria.azimute;
+
+    const logElement = document.getElementById('log-telemetria');
+    if (logElement) {
+        logElement.innerHTML = 
+            `🔭 DISTÂNCIA: ${(distParaPainel / 1000).toFixed(2)} Km<br>🧭 AZIMUTE: ${aziParaPainel}°`;
+    }
+
+    // 2. Atualização do Modelo 3D (Visual do Campo de Batalha)
+    // Usamos a posição real enviada pelo servidor para um movimento suave
+    if (dados.posicaoReal) {
+        // O navio desliza suavemente no eixo X (Leste-Oeste) 
+        // e mantém o Z (Norte) sem a oscilação do ruído aleatório
+        alvo.position.x = dados.posicaoReal.x;
+        alvo.position.z = dados.posicaoReal.z;
     }
 });
 

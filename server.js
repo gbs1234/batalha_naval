@@ -11,10 +11,10 @@ const io = new Server(server);
 app.use(express.static(path.join(__dirname, 'public')));
 
 let alvo = {
-    x: 22000, 
-    z: 5000,
-    vx: -8,
-    vz: 3,
+    x: 29000, 
+    z: 25000,
+    vx: -25,
+    vz: 0,
     ultimaAtualizacao: Date.now()
 };
 
@@ -24,22 +24,29 @@ setInterval(() => {
     let dt = (agora - alvo.ultimaAtualizacao) / 1000;
     
     alvo.x += alvo.vx * dt;
-    alvo.z += alvo.vz * dt;
+    //alvo.z += alvo.vz * dt;
     alvo.ultimaAtualizacao = agora;
 
     let distReal = Math.sqrt(alvo.x**2 + alvo.z**2);
     let azimuteReal = Math.atan2(alvo.x, alvo.z) * (180 / Math.PI);
 
-    const dadosTelemetria = {
-        distancia: (distReal + (Math.random() * 40 - 20)).toFixed(0),
-        azimute: (azimuteReal + (Math.random() * 0.4 - 0.2)).toFixed(1)
+    const dadosParaEnvio = {
+        // Dados com erro (o que o aluno vê no painel)
+        telemetria: {
+            distancia: (distReal + (Math.random() * 40 - 20)).toFixed(0),
+            azimute: (azimuteReal + (Math.random() * 0.4 - 0.2)).toFixed(1)
+        },
+        // Dados reais (o que o Three.js usa para desenhar)
+        posicaoReal: {
+            x: alvo.x,
+            z: alvo.z
+        }
     };
 
-    // Envia para todos os conectados
-    io.emit('telemetria', dadosTelemetria);
+    io.emit('telemetria', dadosParaEnvio);
     
     // LOG NO TERMINAL: Se isso não aparecer no seu console, o loop parou.
-    console.log(`[TELEMETRIA] Enviada: ${dadosTelemetria.distancia}m`);
+    console.log(`[TELEMETRIA] Enviada: ${dadosParaEnvio.telemetria.distancia} m`);
 }, 2000);
 
 io.on('connection', (socket) => {
@@ -50,7 +57,7 @@ io.on('connection', (socket) => {
             v0: parseFloat(dados.v0),
             eleva: parseFloat(dados.angulo),
             azimute: parseFloat(dados.azimute),
-            massa: 871, calibre: 0.381, lat: -15.8
+            massa: 871, calibre: 0.381, lat: 58.0
         };
         const trajetoria = calcularTrajetoria(params);
         const impacto = trajetoria[trajetoria.length - 1];
@@ -60,8 +67,8 @@ io.on('connection', (socket) => {
 
         // Definição do tamanho do navio (margens de acerto)
         // Como o navio está de perfil ou de frente, vamos usar uma margem generosa para a aula
-        const larguraNavio = 40;  // Metros (Eixo X - desvio lateral)
-        const comprimentoNavio = 150; // Metros (Eixo Z - alcance)
+        const larguraNavio = 60;  // Metros (Eixo X - desvio lateral)
+        const comprimentoNavio = 200; // Metros (Eixo Z - alcance)
 
         let acerto = Math.abs(erroX) < larguraNavio && Math.abs(erroZ) < comprimentoNavio;
 

@@ -42,6 +42,27 @@
             font-size: 0.95em; line-height: 1.6; 
         }
         h3 { margin: 0 0 10px 0; color: #00ff00; text-align: center; border-bottom: 1px solid #00ff00; }
+
+        #telemetria-vetorial {
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 100;
+        background: rgba(0, 20, 0, 0.6);
+        padding: 5px 20px;
+        border-bottom: 1px solid #004400;
+        color: #00ff00;
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 0.8em; /* Fonte pequena conforme solicitado */
+        display: flex;
+        gap: 20px;
+        pointer-events: none;
+        }
+        .vetor-valor { color: #ffff00; font-weight: bold; }
+
+
+
     </style>
 </head>
 <body>
@@ -79,11 +100,11 @@
         document.body.appendChild(renderer.domElement);
 
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
-        camera.position.set(-10000, 8000, -10000);
-        camera.lookAt(20000, 0, 20000);
+        camera.position.set(-8000, 10000, -8000);
+        camera.lookAt(35000, 0, 35000);
 
-        const grid = new THREE.GridHelper(80000, 80, 0x003300, 0x001100);
-        grid.position.set(40000, 0, 40000);
+        const grid = new THREE.GridHelper(60000, 60, 0x003300, 0x001100);
+        grid.position.set(30000, 0, 30000);
         scene.add(grid);
 
         // VETORES NA ORIGEM (X=Azul, Z=Vermelho conforme sua sugestão de cores)
@@ -98,16 +119,38 @@
         scene.add(alvo);
 
         // 2. LOGICA DE COMUNICAÇÃO
-        socket.on('telemetria', (dados) => {
-            if (!alvoAtivo) return;
+      socket.on('telemetria', (dados) => {
+
+        // 1. Verificação de segurança: se o rádio receber algo, ele sai de "espera"
+            if (!dados || !alvo) return;
+             
+             
+
+            // Acessamos dados.telemetria porque você aninhou os dados no servidor
+            const dParaTexto = dados.telemetria.distancia;
+            const aParaTexto = dados.telemetria.azimute;
+
             document.getElementById('log-telemetria').innerHTML = 
-                `🔭 DISTÂNCIA: ${dados.distancia/1000} Km<br>🧭 AZIMUTE: ${dados.azimute}°`;
-            const d = parseFloat(dados.distancia);
-            const a = (parseFloat(dados.azimute) * Math.PI) / 180;
-            alvo.position.set(d * Math.sin(a), 0, d * Math.cos(a));
+                `🔭 DISTÂNCIA: ${(dParaTexto / 1000).toFixed(2)} Km<br>🧭 AZIMUTE: ${aParaTexto}°`;
+
+            console.log("X real recebido:", dados.posicaoReal.x);
+
+            if (dados.posicaoReal) {
+                alvo.position.x = dados.posicaoReal.x;
+                alvo.position.z = dados.posicaoReal.z;
+                alvo.visible = true; // Garante que o ponto apareça
+            }
+
+            // Troca a mensagem de status se houver uma
+            const statusRadio = document.getElementById('status-radio');
+            if (statusRadio) statusRadio.innerText = "SINAL ESTÁVEL";
         });
 
+
         socket.on('relatorioImpacto', (res) => { dadosUltimoImpacto = res; });
+
+      
+
 
         socket.on('animarTiro', (dados) => {
             if (trajetoriaAtual) scene.remove(trajetoriaAtual);
@@ -144,17 +187,31 @@
                                 <br> <span style="color: #ff5555;">Z = ${dadosUltimoImpacto.z/1000} Km</span> 
                                 <br><br> ERRO:
                                 <br> <span style="color: #55aaff;">ΔX = ${dadosUltimoImpacto.erroX/1000} Km</span>  
-                                <br> <span style="color: #ff5555;">ΔZ = ${dadosUltimoImpacto.erroZ} Km</span>`;
+                                <br> <span style="color: #ff5555;">ΔZ = ${dadosUltimoImpacto.erroZ/1000} Km</span>`;
                         }
                     }
                     return;
                 }
                 const p = pontos[i];
                 projetilAtual.position.set(p.x, p.y, p.z);
+                // Atualiza os números inteiros na parte superior
+                // Nota: p.vx, p.vy e p.vz devem vir do seu cálculo de trajetória no servidor
+                if(p.vx !== undefined) {
+                    document.getElementById('val-vx').innerText = Math.round(p.vx);
+                    document.getElementById('val-vy').innerText = Math.round(p.vy);
+                    document.getElementById('val-vz').innerText = Math.round(p.vz);
+                }
+
+
                 rastro.push(new THREE.Vector3(p.x, p.y, p.z));
                 geoLinha.setFromPoints(rastro);
+                
                 i++;
             }, 300); // Velocidade de animação acelerada para fluidez em aula
+
+            
+
+
         });
 
         document.getElementById('btn-disparar').onclick = () => {
@@ -181,5 +238,12 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         };
     </script>
+
+    <div id="telemetria-vetorial">
+        <span>Vx: <span id="val-vx" class="vetor-valor">0</span> m/s</span>
+        <span>Vy: <span id="val-vy" class="vetor-valor">0</span> m/s</span>
+        <span>Vz: <span id="val-vz" class="vetor-valor">0</span> m/s</span>
+    </div>
+
 </body>
 </html>

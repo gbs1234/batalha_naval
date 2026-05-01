@@ -64,7 +64,14 @@ function calcularTrajetoria(params) {
 
         // Armazena ponto a cada 1 segundo para não sobrecarregar a rede
         if (Math.round(tempoTotal / dt) % 10 === 0) {
-            pontos.push({ x: pos.x, y: pos.y, z: pos.z, t: tempoTotal });
+            pontos.push({ 
+                x: pos.x, 
+                y: pos.y, 
+                z: pos.z, 
+                vx: vel.x, // Adiciona velocidade em X
+                vy: vel.y, // Adiciona velocidade em Y (altura)
+                vz: vel.z,  // Adiciona velocidade em Z (alcance)
+                t: tempoTotal });
         }
     }
 
