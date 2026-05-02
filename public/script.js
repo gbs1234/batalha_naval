@@ -24,6 +24,9 @@ const grid = new THREE.GridHelper(60000, 60, 0x444444, 0x222222);
 grid.position.set(30000, 0, 30000); 
 scene.add(grid);
 
+let alvoAtivo = true; // Permite que a telemetria funcione imediatamente
+let historicoAlertas = "";
+
 scene.add(new THREE.AmbientLight(0xffffff, 0.9));
 
 // Marcador do Canhão (Origem)
@@ -47,6 +50,15 @@ socket.on('connect', () => {
     console.log("Conectado ao servidor! ID:", socket.id);
 });
 
+
+socket.on('alertaRadar', (dados) => {
+    console.log("Alerta recebido:", dados); // Verifique se isso aparece no console
+    // Adiciona o novo alerta ao histórico
+    historicoAlertas = `<br><span style="color: #ffca28; font-weight: bold;">
+        ⚠️ IMPACTO A ${dados.distanciaErro} m!
+    </span>`;
+});
+
 // Escuta a telemetria do alvo vinda do servidor
 socket.on('telemetria', (dados) => {
 
@@ -60,7 +72,8 @@ socket.on('telemetria', (dados) => {
     const logElement = document.getElementById('log-telemetria');
     if (logElement) {
         logElement.innerHTML = 
-            `🔭 DISTÂNCIA: ${(distParaPainel / 1000).toFixed(2)} Km<br>🧭 AZIMUTE: ${aziParaPainel}°`;
+            `🔭 DISTÂNCIA: ${(distParaPainel / 1000).toFixed(2)} Km<br>🧭 AZIMUTE: ${aziParaPainel}°` + 
+            `<hr>` + historicoAlertas;
     }
 
     // 2. Atualização do Modelo 3D (Visual do Campo de Batalha)
@@ -68,8 +81,8 @@ socket.on('telemetria', (dados) => {
     if (dados.posicaoReal) {
         // O navio desliza suavemente no eixo X (Leste-Oeste) 
         // e mantém o Z (Norte) sem a oscilação do ruído aleatório
-        alvo.position.x = dados.posicaoReal.x;
-        alvo.position.z = dados.posicaoReal.z;
+        alvoMesh.position.x = dados.posicaoReal.x;
+        alvoMesh.position.z = dados.posicaoReal.z;
     }
 });
 
@@ -135,6 +148,14 @@ socket.on('animarTiro', (dados) => {
         i++;
     }, 100); // 100ms = 0.1s de simulação
 });
+
+
+
+socket.on('vitoria', (dados) => {
+    alert(dados.msg); // Ou atualize um elemento HTML na tela
+    // Opcional: travar os controles de disparo até o reset
+});
+
 
 // Loop de Renderização
 function animate() {
