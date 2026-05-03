@@ -3,6 +3,13 @@
 // 1. Inicialização do Socket.io
 const socket = io();
 
+let minhaEquipe = null;
+
+socket.on('confirmarEquipe', (data) => {
+    minhaEquipe = data.equipe; // 'A' ou 'B'
+    console.log("Minha equipe:", minhaEquipe);
+});
+
 console.log("Iniciando Sala de Comando...");
 
 // --- 2. CONFIGURAÇÃO DO CENÁRIO (THREE.JS) ---
@@ -50,14 +57,8 @@ socket.on('connect', () => {
     console.log("Conectado ao servidor! ID:", socket.id);
 });
 
+ 
 
-socket.on('alertaRadar', (dados) => {
-    console.log("Alerta recebido:", dados); // Verifique se isso aparece no console
-    // Adiciona o novo alerta ao histórico
-    historicoAlertas = `<br><span style="color: #ffca28; font-weight: bold;">
-        ⚠️ IMPACTO A ${dados.distanciaErro} m!
-    </span>`;
-});
 
 // Escuta a telemetria do alvo vinda do servidor
 socket.on('telemetria', (dados) => {
@@ -86,10 +87,7 @@ socket.on('telemetria', (dados) => {
     }
 });
 
-// Escuta o relatório de erro após o impacto
-socket.on('relatorioImpacto', (res) => {
-    alert(`RELATÓRIO DE IMPACTO:\n----------------------\nImpacto em: X:${res.x} Z:${res.z}\nErro lateral (Coriolis/Vento): ${res.erroX}m\nErro alcance (Arrasto): ${res.erroZ}m\nTempo de voo real: ${res.tempoVoo}s`);
-});
+
 
 // Configuração do botão de disparo
 const btnDisparar = document.getElementById('btn-disparar');
@@ -101,62 +99,15 @@ if(btnDisparar) {
             angulo: document.getElementById('angulo').value,
             azimute: document.getElementById('azimute').value
         };
-        socket.emit('disparar', payload);
+        socket.emit('dispar', payload);
         console.log("Disparo executado:", payload);
     });
 }
 
 // --- 4. ANIMAÇÃO DA TRAJETÓRIA EM TEMPO REAL ---
 
-socket.on('animarTiro', (dados) => {
-    const pontos = dados.caminho;
-    
-    // Projétil (Esfera amarela)
-    const projetil = new THREE.Mesh(
-        new THREE.SphereGeometry(100),
-        new THREE.MeshBasicMaterial({ color: 0xffff00 })
-    );
-    scene.add(projetil);
 
-    // Linha da Trajetória (Rastro)
-    const materialLinha = new THREE.LineBasicMaterial({ color: 0xffaa00 });
-    const geometriaLinha = new THREE.BufferGeometry();
-    const linha = new THREE.Line(geometriaLinha, materialLinha);
-    scene.add(linha);
-
-    let i = 0;
-    let historicoPontos = [];
-
-    // Execução sincronizada com o passo de tempo da física (0.1s)
-    const temporizador = setInterval(() => {
-        if (i >= pontos.length) {
-            clearInterval(temporizador);
-            setTimeout(() => { 
-                scene.remove(projetil); 
-            }, 3000); // Remove o projétil 3s após o impacto
-            return;
-        }
-
-        const p = pontos[i];
-        projetil.position.set(p.x, p.y, p.z);
-        
-        // Desenha o rastro
-        historicoPontos.push(new THREE.Vector3(p.x, p.y, p.z));
-        geometriaLinha.setFromPoints(historicoPontos);
-        geometriaLinha.computeBoundingSphere(); 
-
-        i++;
-    }, 100); // 100ms = 0.1s de simulação
-});
-
-
-
-socket.on('vitoria', (dados) => {
-    alert(dados.msg); // Ou atualize um elemento HTML na tela
-    // Opcional: travar os controles de disparo até o reset
-});
-
-
+ 
 // Loop de Renderização
 function animate() {
     requestAnimationFrame(animate);

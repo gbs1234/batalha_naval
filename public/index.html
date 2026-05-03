@@ -82,6 +82,7 @@
         
         <div id="log-telemetria">RÁDIO EM ESPERA...</div>
         <div id="resultado-impacto"></div>
+        <div id="alerta-radar" style="margin-top:10px; color:#ff4444; font-weight:bold;"></div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -90,7 +91,7 @@
 
     <script>
         const socket = io();
-        let trajetoriaAtual = null, projetilAtual = null, dadosUltimoImpacto = null;
+        let trajetoriaAtual = null, projetilAtual = null;
         let alvoAtivo = true;
         let totalTiros = 0;
 
@@ -121,7 +122,7 @@
         scene.add(alvo);
 
         // 2. LOGICA DE COMUNICAÇÃO
-      socket.on('telemetria', (dados) => {
+        socket.on('telemetria', (dados) => {
 
         // 1. Verificação de segurança: se o rádio receber algo, ele sai de "espera"
             if (!dados || !alvo) return;
@@ -149,18 +150,36 @@
         });
 
 
-        socket.on('relatorioImpacto', (res) => { dadosUltimoImpacto = res; });
+        let minhaEquipe = null;
+
+        socket.on('confirmarEquipe', (data) => {
+            minhaEquipe = data.equipe;
+            console.log("Minha equipe:", minhaEquipe);
+        });
+
+
+        socket.on('alertaRadar', (data) => {
+            console.log("ALERTA RECEBIDO:", data);
+
+            document.getElementById('alerta-radar').innerHTML = `
+                ⚠️ ATAQUE INIMIGO DETECTADO!
+                <br>Erro do inimigo: ${data.distanciaErro} m
+            `;
+        });
 
       
 
 
-        socket.on('animarTiro', (dados) => {
+       socket.on('animarTiro', (dados) => {
+
             if (trajetoriaAtual) scene.remove(trajetoriaAtual);
             if (projetilAtual) scene.remove(projetilAtual);
-            
+
             document.getElementById('resultado-impacto').innerHTML = "🚀 PROJÉTIL EM VOO...";
 
-            const pontos = dados.caminho;
+            const pontos = dados.caminho;          // 🔥 FALTAVA ISSO
+            const impacto = dados.impacto;         // 🔥 USAR DIRETO DO EVENTO
+
             projetilAtual = new THREE.Mesh(
                 new THREE.SphereGeometry(150),
                 new THREE.MeshBasicMaterial({ color: 0xffff00 })
@@ -171,50 +190,85 @@
             trajetoriaAtual = new THREE.Line(geoLinha, new THREE.LineBasicMaterial({ color: 0x00ff00 }));
             scene.add(trajetoriaAtual);
 
-            let i = 0, rastro = [];
+            let i = 0;
+            let rastro = [];
+
             const anim = setInterval(() => {
+
                 if (i >= pontos.length) {
                     clearInterval(anim);
-                    if (dadosUltimoImpacto) {
-                        if (dadosUltimoImpacto.acerto === true || dadosUltimoImpacto.acerto === "true") {
-                            document.getElementById('resultado-impacto').innerHTML = "<b style='color:red; font-size:1.2em;'>💥 ALVO DESTRUÍDO!</b>";
+
+                    if (impacto) {
+
+                        const fuiAtacado = impacto.equipeAtiradora !== minhaEquipe;
+
+                        // ALERTA
+                        if (!impacto.acerto && fuiAtacado) {
+                            document.getElementById('alerta-radar').innerHTML = `
+                                ⚠️ IMPACTO INIMIGO DETECTADO!
+                                <br>Erro: ${Math.sqrt(
+                                    impacto.erroX**2 + impacto.erroZ**2
+                                ).toFixed(0)} m
+                            `;
+                        }
+
+                        // RESULTADO
+                        if (impacto.acerto) {
+                            document.getElementById('resultado-impacto').innerHTML =
+                                "<b style='color:red; font-size:1.2em;'>💥 ALVO DESTRUÍDO!</b>";
+
                             scene.remove(alvo);
                             alvoAtivo = false;
-                            setTimeout(() => { alert("🎯 VITÓRIA! Navio inimigo neutralizado."); }, 300);
+
+                            setTimeout(() => {
+                                alert("🎯 VITÓRIA! Navio inimigo neutralizado.");
+                            }, 300);
+
                         } else {
-                            // RESULTADO COLORIDO E ESPAÇADO
                             document.getElementById('resultado-impacto').innerHTML = `
                                 📍 IMPACTO:
-                                <br> <span style="color: #55aaff;">X = ${dadosUltimoImpacto.x/1000} Km</span>   
-                                <br> <span style="color: #ff5555;">Z = ${dadosUltimoImpacto.z/1000} Km</span> 
+                                <br><span style="color: #55aaff;">X = ${(impacto.x/1000).toFixed(3)} Km</span>   
+                                <br><span style="color: #ff5555;">Z = ${(impacto.z/1000).toFixed(3)} Km</span> 
                                 <br><br> ERRO:
-                                <br> <span style="color: #55aaff;">ΔX = ${dadosUltimoImpacto.erroX/1000} Km</span>  
-                                <br> <span style="color: #ff5555;">ΔZ = ${dadosUltimoImpacto.erroZ/1000} Km</span>`;
+                                <br><span style="color: #55aaff;">ΔX = ${(impacto.erroX/1000).toFixed(3)} Km</span>  
+                                <br><span style="color: #ff5555;">ΔZ = ${(impacto.erroZ/1000).toFixed(3)} Km</span>`;
                         }
                     }
+
                     return;
                 }
+
                 const p = pontos[i];
                 projetilAtual.position.set(p.x, p.y, p.z);
-                // Atualiza os números inteiros na parte superior
-                // Nota: p.vx, p.vy e p.vz devem vir do seu cálculo de trajetória no servidor
-                if(p.vx !== undefined) {
+
+                if (p.vx !== undefined) {
                     document.getElementById('val-vx').innerText = Math.round(p.vx);
                     document.getElementById('val-vy').innerText = Math.round(p.vy);
                     document.getElementById('val-vz').innerText = Math.round(p.vz);
                 }
 
-
                 rastro.push(new THREE.Vector3(p.x, p.y, p.z));
                 geoLinha.setFromPoints(rastro);
-                
+
                 i++;
-            }, 300); // Velocidade de animação acelerada para fluidez em aula
 
-            
-
-
+            }, 300);
         });
+
+
+        socket.on('novaRodada', (data) => {
+        console.log("Nova rodada recebida:", data);
+
+        alvo.position.x = data.alvo.x;
+        alvo.position.z = data.alvo.z;
+
+        alvo.visible = true;
+
+        document.getElementById('resultado-impacto').innerHTML = "🆕 NOVA RODADA INICIADA";
+    });
+
+
+        
 
         document.getElementById('btn-disparar').onclick = () => {
             if (!alvoAtivo) { alert("Sem alvo no setor."); return; }

@@ -93,72 +93,77 @@ io.on('connection', (socket) => {
             massa: 871, calibre: 0.381, lat: 58.0
         };
        
-        // 2. Identificamos quem é o atirador e quem é o alvo
-        const equipe = socket.equipe;  
+       // 2. Define QUEM está atirando e QUEM é o alvo (Essencial para não travar)
+        const minhaEquipe = socket.equipe || ((socket.id === jogadores.A) ? 'A' : 'B');
 
 
-        console.log("Equipe do disparo:", equipe);
+        const equipeInimiga = socket.equipe === 'A' ? 'B' : 'A';
 
-        const equipeInimiga = equipe === 'A' ? 'B' : 'A';
+        const alvoID = (minhaEquipe === 'A') ? jogadores.B : jogadores.A;
 
+        // 3. Executa o cálculo da trajetória
         const trajetoria = calcularTrajetoria(params);
-
-        console.log("Emitindo para:", `equipe_${equipeInimiga}`);
-
-
-        // Apenas quem atirou vê o rastro para poder corrigir a mira
-        socket.emit('animarTiro', { equipe: equipe, caminho: trajetoria });
-
         const impacto = trajetoria[trajetoria.length - 1];
 
+        // 4. Calcula o erro em relação ao alvo móvel[cite: 5, 9]
         let erroX = impacto.x - alvo.x;
         let erroZ = impacto.z - alvo.z;
 
-        // Definição do tamanho do navio (margens de acerto)
+
+       
+
+        // 6. Definição do tamanho do navio (margens de acerto)
         // Como o navio está de perfil ou de frente, vamos usar uma margem generosa para a aula
         const larguraNavio = 340;  // Metros (Eixo X - desvio lateral)
         const comprimentoNavio = 100; // Metros (Eixo Z - alcance)
 
         let acerto = Math.abs(erroX) < larguraNavio && Math.abs(erroZ) < comprimentoNavio;
 
-        socket.emit('relatorioImpacto', {
-            x: impacto.x.toFixed(0),
-            z: impacto.z.toFixed(0),
-            erroX: erroX.toFixed(0),
-            erroZ: erroZ.toFixed(0),
-            tempoVoo: impacto.t.toFixed(1),
-            acerto: acerto // Novo campo booleano
+        // 7. Envia o relatório de impacto para quem atirou[cite: 5, 9]
+        socket.emit('animarTiro', {  
+            equipe: socket.equipe,
+            caminho: trajetoria,   // 🔥 ESSENCIAL
+            impacto: {
+                x: impacto.x,
+                z: impacto.z,
+                erroX: erroX,
+                erroZ: erroZ,
+                acerto: acerto,
+                equipeAtiradora: socket.equipe
+            }
         });
 
 
-        console.log(`Tentando enviar alerta para: equipe_${equipeInimiga}`);
-        
-        // O inimigo NÃO vê o rastro (para não saber de onde veio), 
-        // mas recebe um alerta de rádio quando o projétil cai
-        io.to(`equipe_${equipeInimiga}`).emit('alertaRadar', {
-            msg: "⚠️ IMPACTO DETECTADO NO SETOR!",
-            distanciaErro: Math.sqrt(erroX**2 + erroZ**2).toFixed(0),
-             
-        });
-
-
-        if (acerto) {
-            // Se houve acerto, avisamos TODOS (io.emit) que a batalha acabou
+      if (acerto) {
             io.emit('vitoria', { 
                 vencedor: minhaEquipe, 
                 msg: `💥 O navio da Equipe ${minhaEquipe} afundou o inimigo!` 
             });
-            // Opcional: Resetar a posição do alvo para uma nova rodada após 5 segundos
+
             setTimeout(() => {
-                alvo.x = 50000; 
+                alvo.x = 30000;
+                alvo.z = 30000;
+
+                io.emit('novaRodada', {
+                    alvo
+                });
+
                 console.log("Nova rodada iniciada!");
             }, 5000);
         }
-
-
-        
          
-    });
+        console.log(`Tentando enviar alerta para: equipe_${equipeInimiga}`);
+
+        // 8. O ALERTA: Envia para o ID direto do inimigo para evitar erro de sala
+        if (alvoID) {
+            console.log(`📡 Alerta enviado para o inimigo: ${alvoID}`);
+            io.to(`equipe_${equipeInimiga}`).emit('alertaRadar', {  
+                distanciaErro: Math.sqrt(erroX**2 + erroZ**2).toFixed(0)
+            });
+        }
+    }); 
+        
+   
 });
 
 server.listen(3000, '0.0.0.0', () => {
