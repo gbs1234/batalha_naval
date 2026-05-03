@@ -1,14 +1,6 @@
 // public/script.js - Versão Consolidada e Estabilizada
 
-// 1. Inicialização do Socket.io
-const socket = io();
-
-let minhaEquipe = null;
-
-socket.on('confirmarEquipe', (data) => {
-    minhaEquipe = data.equipe; // 'A' ou 'B'
-    console.log("Minha equipe:", minhaEquipe);
-});
+ 
 
 console.log("Iniciando Sala de Comando...");
 
@@ -51,43 +43,6 @@ const alvoMesh = new THREE.Mesh(
 );
 scene.add(alvoMesh);
 
-// --- 3. LÓGICA DE COMUNICAÇÃO (TELEMETRIA E EVENTOS) ---
-
-socket.on('connect', () => {
-    console.log("Conectado ao servidor! ID:", socket.id);
-});
-
- 
-
-
-// Escuta a telemetria do alvo vinda do servidor
-socket.on('telemetria', (dados) => {
-
-    if (!alvoAtivo) return;
-
-    // 1. Atualização do Texto (Interface do Aluno)
-    // Agora acessamos através de dados.telemetria
-    const distParaPainel = parseFloat(dados.telemetria.distancia);
-    const aziParaPainel = dados.telemetria.azimute;
-
-    const logElement = document.getElementById('log-telemetria');
-    if (logElement) {
-        logElement.innerHTML = 
-            `🔭 DISTÂNCIA: ${(distParaPainel / 1000).toFixed(2)} Km<br>🧭 AZIMUTE: ${aziParaPainel}°` + 
-            `<hr>` + historicoAlertas;
-    }
-
-    // 2. Atualização do Modelo 3D (Visual do Campo de Batalha)
-    // Usamos a posição real enviada pelo servidor para um movimento suave
-    if (dados.posicaoReal) {
-        // O navio desliza suavemente no eixo X (Leste-Oeste) 
-        // e mantém o Z (Norte) sem a oscilação do ruído aleatório
-        alvoMesh.position.x = dados.posicaoReal.x;
-        alvoMesh.position.z = dados.posicaoReal.z;
-    }
-});
-
-
 
 // Configuração do botão de disparo
 const btnDisparar = document.getElementById('btn-disparar');
@@ -95,11 +50,11 @@ if(btnDisparar) {
     btnDisparar.addEventListener('click', () => {
         const payload = {
             equipe: 'alfa',
-            v0: document.getElementById('v0').value,
+            v0: document.getElementById('v0')?.value || 802,
             angulo: document.getElementById('angulo').value,
             azimute: document.getElementById('azimute').value
         };
-        socket.emit('dispar', payload);
+        socket.emit('disparar', payload);
         console.log("Disparo executado:", payload);
     });
 }

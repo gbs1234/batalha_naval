@@ -10,10 +10,11 @@ const io = new Server(server);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-let jogadores = {
-    A: null,
-    B: null
-};
+console.log("SERVIDOR ATIVO");
+
+console.log("SERVIDOR INICIADO AGORA:", Date.now());
+
+let animAtual = null;
 
 let alvo = {
     x: 30000, 
@@ -48,44 +49,61 @@ setInterval(() => {
         }
     };
 
-    io.to('equipe_A').to('equipe_B').emit('telemetria', dadosParaEnvio);
+    io.to('equipe_A').emit('telemetria', dadosParaEnvio);
+    io.to('equipe_B').emit('telemetria', dadosParaEnvio);
     
     // LOG NO TERMINAL: Se isso não aparecer no seu console, o loop parou.
     console.log(`[TELEMETRIA] Enviada: ${dadosParaEnvio.telemetria.distancia} m`);
 }, 2000);
 
+let jogadores = {
+    A: null,
+    B: null
+};
+
 io.on('connection', (socket) => {
 
-    // Lógica simples de entrada em sala
-    let equipeAtribuida = null;
+    console.log("Cliente conectou:", socket.id);
+
+    let equipeAtribuida;
+
     if (!jogadores.A) {
         jogadores.A = socket.id;
         equipeAtribuida = 'A';
     } else if (!jogadores.B) {
         jogadores.B = socket.id;
         equipeAtribuida = 'B';
+    } else {
+        equipeAtribuida = 'ESPECTADOR';
     }
 
-    if (equipeAtribuida) {
-        socket.equipe = equipeAtribuida;  // 🔥 ESSENCIAL
+    socket.equipe = equipeAtribuida;
 
+    if (equipeAtribuida === 'A' || equipeAtribuida === 'B') {
         socket.join(`equipe_${equipeAtribuida}`);
-
-        console.log(`Oficial da Equipe ${equipeAtribuida} conectado (ID: ${socket.id})`);
-
-        socket.emit('confirmarEquipe', { equipe: equipeAtribuida });
     }
 
-    // Ao desconectar, libera a vaga na equipe
+    console.log("Equipe atribuída:", socket.equipe);
+
+    // 🔥 ENVIO GARANTIDO
+    socket.emit('confirmarEquipe', {
+        equipe: socket.equipe
+    });
+
     socket.on('disconnect', () => {
         if (jogadores.A === socket.id) jogadores.A = null;
         if (jogadores.B === socket.id) jogadores.B = null;
-        console.log(`Oficial da Equipe ${equipeAtribuida} desconectou.`);
+        console.log(`Oficial da Equipe ${socket.equipe} desconectou.`);
     });
 
 
 
+
+
     socket.on('disparar', (dados) => {
+
+        
+
         const params = {
             v0: parseFloat(dados.v0),
             eleva: parseFloat(dados.angulo),
@@ -93,13 +111,7 @@ io.on('connection', (socket) => {
             massa: 871, calibre: 0.381, lat: 58.0
         };
        
-       // 2. Define QUEM está atirando e QUEM é o alvo (Essencial para não travar)
-        const minhaEquipe = socket.equipe || ((socket.id === jogadores.A) ? 'A' : 'B');
-
-
-        const equipeInimiga = socket.equipe === 'A' ? 'B' : 'A';
-
-        const alvoID = (minhaEquipe === 'A') ? jogadores.B : jogadores.A;
+        
 
         // 3. Executa o cálculo da trajetória
         const trajetoria = calcularTrajetoria(params);
@@ -120,7 +132,11 @@ io.on('connection', (socket) => {
         let acerto = Math.abs(erroX) < larguraNavio && Math.abs(erroZ) < comprimentoNavio;
 
         // 7. Envia o relatório de impacto para quem atirou[cite: 5, 9]
-        socket.emit('animarTiro', {  
+        io.emit('animarTiro', {  
+
+            
+
+
             equipe: socket.equipe,
             caminho: trajetoria,   // 🔥 ESSENCIAL
             impacto: {
@@ -133,38 +149,11 @@ io.on('connection', (socket) => {
             }
         });
 
-
-      if (acerto) {
-            io.emit('vitoria', { 
-                vencedor: minhaEquipe, 
-                msg: `💥 O navio da Equipe ${minhaEquipe} afundou o inimigo!` 
-            });
-
-            setTimeout(() => {
-                alvo.x = 30000;
-                alvo.z = 30000;
-
-                io.emit('novaRodada', {
-                    alvo
-                });
-
-                console.log("Nova rodada iniciada!");
-            }, 5000);
-        }
          
-        console.log(`Tentando enviar alerta para: equipe_${equipeInimiga}`);
-
-        // 8. O ALERTA: Envia para o ID direto do inimigo para evitar erro de sala
-        if (alvoID) {
-            console.log(`📡 Alerta enviado para o inimigo: ${alvoID}`);
-            io.to(`equipe_${equipeInimiga}`).emit('alertaRadar', {  
-                distanciaErro: Math.sqrt(erroX**2 + erroZ**2).toFixed(0)
-            });
-        }
     }); 
         
    
-});
+ }); 
 
 server.listen(3000, '0.0.0.0', () => {
     console.log('⚓ Servidor Ativo em http://localhost:3000');

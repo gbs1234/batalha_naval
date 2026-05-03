@@ -88,9 +88,42 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="/socket.io/socket.io.js"></script>
+    
 
     <script>
+        
+
         const socket = io();
+
+        // (opcional, para debug)
+        socket.onAny((event, ...args) => {
+            console.log(" CHEGOU EVENTO:", event, args);
+        });
+
+
+        let minhaEquipe = null;
+    
+
+        // 🔥 Listener DEVE ficar fora do connect
+        socket.on('confirmarEquipe', (data) => {
+            minhaEquipe = data.equipe;
+        
+
+            console.log("Minha equipe: ", minhaEquipe);
+        });
+
+        // Apenas conexão
+    socket.on('connect', () => {
+           console.log("CONECTADO:", socket.id);
+            
+
+        });
+
+        
+
+
+
+
         let trajetoriaAtual = null, projetilAtual = null;
         let alvoAtivo = true;
         let totalTiros = 0;
@@ -125,8 +158,7 @@
         socket.on('telemetria', (dados) => {
 
         // 1. Verificação de segurança: se o rádio receber algo, ele sai de "espera"
-            if (!dados || !alvo) return;
-             
+            if (!dados || !alvo) return;          
              
 
             // Acessamos dados.telemetria porque você aninhou os dados no servidor
@@ -150,22 +182,7 @@
         });
 
 
-        let minhaEquipe = null;
-
-        socket.on('confirmarEquipe', (data) => {
-            minhaEquipe = data.equipe;
-            console.log("Minha equipe:", minhaEquipe);
-        });
-
-
-        socket.on('alertaRadar', (data) => {
-            console.log("ALERTA RECEBIDO:", data);
-
-            document.getElementById('alerta-radar').innerHTML = `
-                ⚠️ ATAQUE INIMIGO DETECTADO!
-                <br>Erro do inimigo: ${data.distanciaErro} m
-            `;
-        });
+        
 
       
 
@@ -174,6 +191,7 @@
 
             if (trajetoriaAtual) scene.remove(trajetoriaAtual);
             if (projetilAtual) scene.remove(projetilAtual);
+
 
             document.getElementById('resultado-impacto').innerHTML = "🚀 PROJÉTIL EM VOO...";
 
@@ -203,13 +221,14 @@
                         const fuiAtacado = impacto.equipeAtiradora !== minhaEquipe;
 
                         // ALERTA
+                        
                         if (!impacto.acerto && fuiAtacado) {
-                            document.getElementById('alerta-radar').innerHTML = `
-                                ⚠️ IMPACTO INIMIGO DETECTADO!
-                                <br>Erro: ${Math.sqrt(
-                                    impacto.erroX**2 + impacto.erroZ**2
-                                ).toFixed(0)} m
-                            `;
+                        document.getElementById('alerta-radar').innerHTML = `
+                            ⚠️ IMPACTO INIMIGO DETECTADO!
+                            <br>Erro: ${Math.sqrt(
+                                impacto.erroX**2 + impacto.erroZ**2
+                            ).toFixed(0)} m
+                        `;
                         }
 
                         // RESULTADO
@@ -278,7 +297,6 @@
             document.getElementById('resultado-impacto').innerHTML = "";
             
             socket.emit('disparar', {
-                equipe: 'ALFA',
                 v0: 802,
                 angulo: document.getElementById('angulo').value,
                 azimute: document.getElementById('azimute').value
@@ -294,6 +312,8 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         };
     </script>
+
+   
 
     <div id="telemetria-vetorial">
         <span>Vx: <span id="val-vx" class="vetor-valor">0</span> m/s</span>
