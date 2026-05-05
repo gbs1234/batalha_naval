@@ -12,7 +12,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 console.log("SERVIDOR ATIVO");
 
-console.log("SERVIDOR INICIADO AGORA:", Date.now());
+//console.log("SERVIDOR INICIADO AGORA:", Date.now());
 
 let animAtual = null;
 
@@ -53,7 +53,7 @@ setInterval(() => {
     io.to('equipe_B').emit('telemetria', dadosParaEnvio);
     
     // LOG NO TERMINAL: Se isso não aparecer no seu console, o loop parou.
-    console.log(`[TELEMETRIA] Enviada: ${dadosParaEnvio.telemetria.distancia} m`);
+    //console.log(`[TELEMETRIA] Enviada: ${dadosParaEnvio.telemetria.distancia} m`);
 }, 2000);
 
 let jogadores = {
@@ -74,20 +74,28 @@ io.on('connection', (socket) => {
         jogadores.B = socket.id;
         equipeAtribuida = 'B';
     } else {
-        equipeAtribuida = 'ESPECTADOR';
+        console.log("Sala cheia. Conexão recusada:", socket.id);
+
+        socket.emit('salaCheia');
+        socket.disconnect();
+
+        return;  // 🔥 MUITO IMPORTANTE
     }
 
     socket.equipe = equipeAtribuida;
 
-    if (equipeAtribuida === 'A' || equipeAtribuida === 'B') {
-        socket.join(`equipe_${equipeAtribuida}`);
-    }
-
+    socket.join(`equipe_${equipeAtribuida}`);
     console.log("Equipe atribuída:", socket.equipe);
 
     // 🔥 ENVIO GARANTIDO
-    socket.emit('confirmarEquipe', {
-        equipe: socket.equipe
+  socket.on('ready', () => {
+        console.log(">>> RECEBI READY de:", socket.id);
+
+        socket.emit('confirmarEquipe', {
+            equipe: socket.equipe
+        });
+
+        console.log(">>> ENVIEI confirmarEquipe:", socket.equipe);
     });
 
     socket.on('disconnect', () => {
@@ -131,14 +139,14 @@ io.on('connection', (socket) => {
 
         let acerto = Math.abs(erroX) < larguraNavio && Math.abs(erroZ) < comprimentoNavio;
 
-        // 7. Envia o relatório de impacto para quem atirou[cite: 5, 9]
-        io.emit('animarTiro', {  
-
-            
-
-
+        // 7. Envia o relatório de impacto para quem atirou
+        io.to(`equipe_${socket.equipe}`).emit('animarTiro', {
             equipe: socket.equipe,
-            caminho: trajetoria,   // 🔥 ESSENCIAL
+            caminho: trajetoria
+        });
+
+
+        io.emit('impacto', {
             impacto: {
                 x: impacto.x,
                 z: impacto.z,

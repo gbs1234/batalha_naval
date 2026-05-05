@@ -1,79 +1,216 @@
-// public/script.js - Versão Consolidada e Estabilizada
+// public/script.js
 
- 
+console.log("Script carregado");
 
-console.log("Iniciando Sala de Comando...");
+let tiroEmAndamento = false;
 
-// --- 2. CONFIGURAÇÃO DO CENÁRIO (THREE.JS) ---
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100000);
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
+// Cria o socket
+const socket = io();
 
-const controls = new THREE.OrbitControls(camera, renderer.domElement);
+// Guarda a equipe
+let minhaEquipe = null;
 
-// Posicionando a câmera: Visão de perspectiva da origem (0,0)
-camera.position.set(-3000, 4000, -3000); 
-camera.lookAt(15000, 0, 15000);
+// Conexão estabelecida
+socket.on('connect', () => {
+    console.log("CONECTADO:", socket.id);
 
-// Grade (Grid) representando o papel quadriculado
-// Deslocamos para que (0,0) seja o canto inferior esquerdo
-const grid = new THREE.GridHelper(60000, 60, 0x444444, 0x222222);
-grid.position.set(30000, 0, 30000); 
-scene.add(grid);
+    // ESSENCIAL: pede a equipe
+    socket.emit('ready');
+});
 
-let alvoAtivo = true; // Permite que a telemetria funcione imediatamente
-let historicoAlertas = "";
+// Recebe a equipe do servidor
+socket.on('confirmarEquipe', (data) => {
+    minhaEquipe = data.equipe;
 
-scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+    console.log("🔥 MINHA EQUIPE:", minhaEquipe);
 
-// Marcador do Canhão (Origem)
-const canhao = new THREE.Mesh(
-    new THREE.BoxGeometry(300, 300, 600),
-    new THREE.MeshBasicMaterial({ color: 0x666666 })
-);
-canhao.position.set(0, 150, 0);
-scene.add(canhao);
+    // (opcional) mostrar na tela
+    const painel = document.getElementById("painel-equipe");
+    if (painel) {
+        painel.innerText = "Equipe: " + minhaEquipe;
+    }
+});
 
-// Marcador do Alvo (Bolinha Vermelha Móvel)
-const alvoMesh = new THREE.Mesh(
-    new THREE.SphereGeometry(200),
-    new THREE.MeshBasicMaterial({ color: 0xff0000 })
-);
-scene.add(alvoMesh);
+// Recebe telemetria
+ // 2. LOGICA DE COMUNICAÇÃO
+socket.on('telemetria', (dados) => {
+
+// 1. Verificação de segurança: se o rádio receber algo, ele sai de "espera"
+    if (!dados || !alvo) return;        
+    
+   
+        
+
+    // Acessamos dados.telemetria porque você aninhou os dados no servidor
+    const dParaTexto = dados.telemetria.distancia;
+    const aParaTexto = dados.telemetria.azimute;
+
+    document.getElementById('log-telemetria').innerHTML = 
+        `🔭 DISTÂNCIA: ${(dParaTexto / 1000).toFixed(2)} Km<br>🧭 AZIMUTE: ${aParaTexto}°`;
+
+    console.log("X real recebido:", dados.posicaoReal.x);
+
+    if (dados.posicaoReal) {
+        alvo.position.x = dados.posicaoReal.x;
+        alvo.position.z = dados.posicaoReal.z;
+        alvo.visible = true; // Garante que o ponto apareça
+    }
+
+    
+
+    // Troca a mensagem de status se houver uma
+    const statusRadio = document.getElementById('status-radio');
+    if (statusRadio) statusRadio.innerText = "SINAL ESTÁVEL";
+});
 
 
-// Configuração do botão de disparo
+// Botão disparar
 const btnDisparar = document.getElementById('btn-disparar');
-if(btnDisparar) {
+
+if (btnDisparar) {
     btnDisparar.addEventListener('click', () => {
+
         const payload = {
-            equipe: 'alfa',
             v0: document.getElementById('v0')?.value || 802,
             angulo: document.getElementById('angulo').value,
             azimute: document.getElementById('azimute').value
         };
+
+        console.log("🎯 Enviando disparo:", payload);
+
         socket.emit('disparar', payload);
-        console.log("Disparo executado:", payload);
     });
 }
 
-// --- 4. ANIMAÇÃO DA TRAJETÓRIA EM TEMPO REAL ---
+// =============================
+// 🎯 ANIMAÇÃO DO TIRO
+// =============================
+
+let trajetoriaAtual = null;
+let projetilAtual = null;
+let ultimoImpacto = null;
 
 
- 
-// Loop de Renderização
-function animate() {
-    requestAnimationFrame(animate);
-    controls.update();
-    renderer.render(scene, camera);
-}
-animate();
+socket.on('animarTiro', (dados) => {
 
-// Ajuste de redimensionamento da janela
-window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    if (trajetoriaAtual) scene.remove(trajetoriaAtual);
+    if (projetilAtual) scene.remove(projetilAtual);
+
+    tiroEmAndamento = true;
+    ultimoImpacto = null; //  
+
+
+    setTextoComFade(
+        document.getElementById('resultado-impacto'),
+        "🚀 PROJÉTIL EM VOO..."
+    );
+
+    const pontos = dados.caminho;           
+    const impacto = dados.impacto;          
+
+    projetilAtual = new THREE.Mesh(
+        new THREE.SphereGeometry(150),
+        new THREE.MeshBasicMaterial({ color: 0xffff00 })
+    );
+    scene.add(projetilAtual);
+
+    const geoLinha = new THREE.BufferGeometry();
+    trajetoriaAtual = new THREE.Line(geoLinha, new THREE.LineBasicMaterial({ color: 0x00ff00 }));
+    scene.add(trajetoriaAtual);
+
+    let i = 0;
+    let rastro = [];
+
+    const anim = setInterval(() => {
+
+        if (i >= pontos.length) {
+            clearInterval(anim);
+            tiroEmAndamento = false;
+
+            if (ultimoImpacto) {
+                mostrarImpacto(ultimoImpacto);
+            }
+
+            return;
+        }
+
+        const p = pontos[i];
+        projetilAtual.position.set(p.x, p.y, p.z);
+
+        if (p.vx !== undefined) {
+            document.getElementById('val-vx').innerText = Math.round(p.vx);
+            document.getElementById('val-vy').innerText = Math.round(p.vy);
+            document.getElementById('val-vz').innerText = Math.round(p.vz);
+        }
+
+        rastro.push(new THREE.Vector3(p.x, p.y, p.z));
+        geoLinha.setFromPoints(rastro);
+
+        i++;
+
+    }, 300);
 });
+
+
+socket.on('impacto', ({ impacto }) => {
+
+       ultimoImpacto = impacto;
+
+    // 🔥 se o tiro já terminou, mostra imediatamente
+    if (!tiroEmAndamento) {
+        mostrarImpacto(impacto);
+    }
+     
+});
+
+
+function mostrarImpacto(impacto) {
+
+    const alerta = document.getElementById('alerta-radar');
+    const resultado = document.getElementById('resultado-impacto');
+
+    if (!alerta || !resultado) return;
+
+    const fuiAtacado = impacto.equipeAtiradora !== minhaEquipe;
+
+    if (fuiAtacado) {
+
+        const distancia = Math.sqrt(
+            impacto.erroX**2 + impacto.erroZ**2
+        );
+
+        alerta.innerHTML = impacto.acerto
+            ? "💥 IMPACTO DIRETO!"
+            : `⚠️ IMPACTO INIMIGO (${(distancia/1000).toFixed(2)} km)`;
+
+        alerta.style.color = "red";
+
+        setTimeout(() => alerta.innerHTML = "", 4000);
+    }
+    else {
+
+        if (impacto.acerto) {
+            resultado.innerHTML = "💥 ALVO DESTRUÍDO!";
+        } else {
+            resultado.innerHTML = `
+                📍 IMPACTO:
+                <br>ΔX = ${(impacto.erroX/1000).toFixed(2)} km
+                <br>ΔZ = ${(impacto.erroZ/1000).toFixed(2)} km
+            `;
+        }
+    }
+}
+
+function setTextoComFade(elemento, novoTexto) {
+    if (!elemento) return;
+
+    // inicia fade out
+    elemento.classList.add("fade-out");
+
+    setTimeout(() => {
+        elemento.innerHTML = novoTexto;
+
+        // fade in
+        elemento.classList.remove("fade-out");
+    }, 300);
+}

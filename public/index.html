@@ -61,6 +61,15 @@
         }
         .vetor-valor { color: #ffff00; font-weight: bold; }
 
+        .fade {
+            opacity: 1;
+            transition: opacity 0.5s ease;
+        }
+
+        .fade-out {
+            opacity: 0;
+        }
+
         
 
 
@@ -87,44 +96,17 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- SOCKET -->
     <script src="/socket.io/socket.io.js"></script>
+
+    <!-- SCRIPT PRINCIPAL -->
+    <script src="/script.js"></script>
     
 
     <script>
-        
 
-        const socket = io();
+        console.log("Inicializando Three.js...");
 
-        // (opcional, para debug)
-        socket.onAny((event, ...args) => {
-            console.log(" CHEGOU EVENTO:", event, args);
-        });
-
-
-        let minhaEquipe = null;
-    
-
-        // 🔥 Listener DEVE ficar fora do connect
-        socket.on('confirmarEquipe', (data) => {
-            minhaEquipe = data.equipe;
-        
-
-            console.log("Minha equipe: ", minhaEquipe);
-        });
-
-        // Apenas conexão
-    socket.on('connect', () => {
-           console.log("CONECTADO:", socket.id);
-            
-
-        });
-
-        
-
-
-
-
-        let trajetoriaAtual = null, projetilAtual = null;
         let alvoAtivo = true;
         let totalTiros = 0;
 
@@ -154,137 +136,8 @@
         );
         scene.add(alvo);
 
-        // 2. LOGICA DE COMUNICAÇÃO
-        socket.on('telemetria', (dados) => {
+        window.alvo = alvo;
 
-        // 1. Verificação de segurança: se o rádio receber algo, ele sai de "espera"
-            if (!dados || !alvo) return;          
-             
-
-            // Acessamos dados.telemetria porque você aninhou os dados no servidor
-            const dParaTexto = dados.telemetria.distancia;
-            const aParaTexto = dados.telemetria.azimute;
-
-            document.getElementById('log-telemetria').innerHTML = 
-                `🔭 DISTÂNCIA: ${(dParaTexto / 1000).toFixed(2)} Km<br>🧭 AZIMUTE: ${aParaTexto}°`;
-
-            console.log("X real recebido:", dados.posicaoReal.x);
-
-            if (dados.posicaoReal) {
-                alvo.position.x = dados.posicaoReal.x;
-                alvo.position.z = dados.posicaoReal.z;
-                alvo.visible = true; // Garante que o ponto apareça
-            }
-
-            // Troca a mensagem de status se houver uma
-            const statusRadio = document.getElementById('status-radio');
-            if (statusRadio) statusRadio.innerText = "SINAL ESTÁVEL";
-        });
-
-
-        
-
-      
-
-
-       socket.on('animarTiro', (dados) => {
-
-            if (trajetoriaAtual) scene.remove(trajetoriaAtual);
-            if (projetilAtual) scene.remove(projetilAtual);
-
-
-            document.getElementById('resultado-impacto').innerHTML = "🚀 PROJÉTIL EM VOO...";
-
-            const pontos = dados.caminho;          // 🔥 FALTAVA ISSO
-            const impacto = dados.impacto;         // 🔥 USAR DIRETO DO EVENTO
-
-            projetilAtual = new THREE.Mesh(
-                new THREE.SphereGeometry(150),
-                new THREE.MeshBasicMaterial({ color: 0xffff00 })
-            );
-            scene.add(projetilAtual);
-
-            const geoLinha = new THREE.BufferGeometry();
-            trajetoriaAtual = new THREE.Line(geoLinha, new THREE.LineBasicMaterial({ color: 0x00ff00 }));
-            scene.add(trajetoriaAtual);
-
-            let i = 0;
-            let rastro = [];
-
-            const anim = setInterval(() => {
-
-                if (i >= pontos.length) {
-                    clearInterval(anim);
-
-                    if (impacto) {
-
-                        const fuiAtacado = impacto.equipeAtiradora !== minhaEquipe;
-
-                        // ALERTA
-                        
-                        if (!impacto.acerto && fuiAtacado) {
-                        document.getElementById('alerta-radar').innerHTML = `
-                            ⚠️ IMPACTO INIMIGO DETECTADO!
-                            <br>Erro: ${Math.sqrt(
-                                impacto.erroX**2 + impacto.erroZ**2
-                            ).toFixed(0)} m
-                        `;
-                        }
-
-                        // RESULTADO
-                        if (impacto.acerto) {
-                            document.getElementById('resultado-impacto').innerHTML =
-                                "<b style='color:red; font-size:1.2em;'>💥 ALVO DESTRUÍDO!</b>";
-
-                            scene.remove(alvo);
-                            alvoAtivo = false;
-
-                            setTimeout(() => {
-                                alert("🎯 VITÓRIA! Navio inimigo neutralizado.");
-                            }, 300);
-
-                        } else {
-                            document.getElementById('resultado-impacto').innerHTML = `
-                                📍 IMPACTO:
-                                <br><span style="color: #55aaff;">X = ${(impacto.x/1000).toFixed(3)} Km</span>   
-                                <br><span style="color: #ff5555;">Z = ${(impacto.z/1000).toFixed(3)} Km</span> 
-                                <br><br> ERRO:
-                                <br><span style="color: #55aaff;">ΔX = ${(impacto.erroX/1000).toFixed(3)} Km</span>  
-                                <br><span style="color: #ff5555;">ΔZ = ${(impacto.erroZ/1000).toFixed(3)} Km</span>`;
-                        }
-                    }
-
-                    return;
-                }
-
-                const p = pontos[i];
-                projetilAtual.position.set(p.x, p.y, p.z);
-
-                if (p.vx !== undefined) {
-                    document.getElementById('val-vx').innerText = Math.round(p.vx);
-                    document.getElementById('val-vy').innerText = Math.round(p.vy);
-                    document.getElementById('val-vz').innerText = Math.round(p.vz);
-                }
-
-                rastro.push(new THREE.Vector3(p.x, p.y, p.z));
-                geoLinha.setFromPoints(rastro);
-
-                i++;
-
-            }, 300);
-        });
-
-
-        socket.on('novaRodada', (data) => {
-        console.log("Nova rodada recebida:", data);
-
-        alvo.position.x = data.alvo.x;
-        alvo.position.z = data.alvo.z;
-
-        alvo.visible = true;
-
-        document.getElementById('resultado-impacto').innerHTML = "🆕 NOVA RODADA INICIADA";
-    });
 
 
         
@@ -295,12 +148,7 @@
             totalTiros++;
             document.getElementById('num-tiros').innerText = totalTiros;
             document.getElementById('resultado-impacto').innerHTML = "";
-            
-            socket.emit('disparar', {
-                v0: 802,
-                angulo: document.getElementById('angulo').value,
-                azimute: document.getElementById('azimute').value
-            });
+             
         };
 
         function render() { requestAnimationFrame(render); renderer.render(scene, camera); }
