@@ -2,7 +2,7 @@
 
 const somDisparo = new Audio('sounds/fire.mp3');
 const somAlerta = new Audio('sounds/alert.mp3');
-const somSplash = new Audio('sounds/blast.mp3');
+const somBlast = new Audio('sounds/blast.mp3');
 
 //LIBERA ÁUDIO NO NAVEGADOR (MUITO IMPORTANTE)
 document.addEventListener('click', () => {
@@ -12,6 +12,7 @@ document.addEventListener('click', () => {
 console.log("Script carregado");
 
 let tiroEmAndamento = false;
+let destruido = false;
 
 // Cria o socket
 const socket = io();
@@ -155,7 +156,7 @@ socket.on('animarTiro', (dados) => {
             if (btnDisparar) btnDisparar.disabled = false;
 
             if (ultimoImpacto) {
-                mostrarImpacto(ultimoImpacto, false);
+                mostrarImpacto(ultimoImpacto,);
             }
 
             return;
@@ -235,19 +236,31 @@ function mostrarImpacto(impacto, foiAtacado) {
             impacto.erroX**2 + impacto.erroZ**2
         );
 
-        alerta.innerHTML = impacto.acerto
-            ? "💥 IMPACTO DIRETO!"
-            : `🌊 Erro do inimigo: (${(distancia/1000).toFixed(2)} km)`;
+        if (impacto.acerto) {
+
+                // 🔥 SOM AGORA NO LUGAR CERTO
+                somBlast.currentTime = 0;
+                somBlast.play();
+
+                destruido = true;
+
+                alerta.innerHTML = "💥 SEU NAVIO FOI DESTRUÍDO!";
+                if (btnDisparar) btnDisparar.disabled = true;
+            } else {
+                alerta.innerHTML = `🌊 Erro do inimigo: (${(distancia/1000).toFixed(2)} km)`;
+            }
+            
 
         alerta.style.color = "red";
+        }
 
-        setTimeout(() => alerta.innerHTML = "", 25000);
-    }
     else {
 
+        console.log("Impacto acerto: ", impacto.acerto);
+
         if (impacto.acerto) {
-            somBlast.currentTime = 0;
-            somBlast.play();
+            //somBlast.currentTime = 0;
+            //somBlast.play();
             resultado.innerHTML = "💥 ALVO DESTRUÍDO!";
         } else {
             resultado.innerHTML = `
