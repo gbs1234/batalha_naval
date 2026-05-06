@@ -1,5 +1,14 @@
 // public/script.js
 
+const somDisparo = new Audio('sounds/fire.mp3');
+const somAlerta = new Audio('sounds/alert.mp3');
+const somSplash = new Audio('sounds/blast.mp3');
+
+//LIBERA ÁUDIO NO NAVEGADOR (MUITO IMPORTANTE)
+document.addEventListener('click', () => {
+    somDisparo.play().then(() => somDisparo.pause());
+}, { once: true });
+
 console.log("Script carregado");
 
 let tiroEmAndamento = false;
@@ -77,6 +86,8 @@ if (btnDisparar) {
         };
 
         console.log("🎯 Enviando disparo:", payload);
+        somDisparo.currentTime = 0;
+        somDisparo.play();
 
         socket.emit('disparar', payload);
     });
@@ -144,7 +155,7 @@ socket.on('animarTiro', (dados) => {
             if (btnDisparar) btnDisparar.disabled = false;
 
             if (ultimoImpacto) {
-                mostrarImpacto(ultimoImpacto);
+                mostrarImpacto(ultimoImpacto, false);
             }
 
             return;
@@ -171,18 +182,35 @@ socket.on('animarTiro', (dados) => {
 socket.on('impacto', ({ id, impacto }) => {
 
       
-    if (!id) return;
-    
-    const fuiAtacado = impacto.equipeAtiradora !== minhaEquipe;
+     if (!id) return;
 
-    if (fuiAtacado) {
-         const tempoSimulado = 15000; // ajuste conforme sua animação
+    const alerta = document.getElementById('alerta-radar');
+
+    const foiAtacado = impacto.equipeAtiradora !== minhaEquipe;
+
+    if (foiAtacado && alerta) {
+
+        somAlerta.currentTime = 0;
+        somAlerta.play();
+
+        // ALERTA DE DISPARO (simulado)
+        alerta.innerHTML = "🚨 INIMIGO ATIRANDO!";
+        alerta.style.color = "#ff5555";
+
+        setTimeout(() => {
+            alerta.innerHTML = "";
+        }, 20000);
+
+        // DEPOIS MOSTRA IMPACTO
+        const tempoSimulado = 20000;
 
         setTimeout(() => {
             mostrarImpacto(impacto, true);
         }, tempoSimulado);
+
         return;
     }
+   
 
     ultimoImpacto = impacto;
 
@@ -209,7 +237,7 @@ function mostrarImpacto(impacto, foiAtacado) {
 
         alerta.innerHTML = impacto.acerto
             ? "💥 IMPACTO DIRETO!"
-            : `🌊 Impacto (${(distancia/1000).toFixed(2)} km)`;
+            : `🌊 Erro do inimigo: (${(distancia/1000).toFixed(2)} km)`;
 
         alerta.style.color = "red";
 
@@ -218,16 +246,20 @@ function mostrarImpacto(impacto, foiAtacado) {
     else {
 
         if (impacto.acerto) {
+            somBlast.currentTime = 0;
+            somBlast.play();
             resultado.innerHTML = "💥 ALVO DESTRUÍDO!";
         } else {
             resultado.innerHTML = `
-                📍 IMPACTO:
+                IMPACTO:
                 <br>ΔX = ${(impacto.erroX/1000).toFixed(2)} km
                 <br>ΔZ = ${(impacto.erroZ/1000).toFixed(2)} km
             `;
         }
     }
 }
+
+
 
 function setTextoComFade(elemento, novoTexto) {
     if (!elemento) return;

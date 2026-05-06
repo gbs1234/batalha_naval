@@ -111,6 +111,8 @@ io.on('connection', (socket) => {
 
     socket.on('disparar', (dados) => {
 
+        const tiroId = Date.now();
+
         
 
         const params = {
@@ -135,8 +137,8 @@ io.on('connection', (socket) => {
 
         // 6. Definição do tamanho do navio (margens de acerto)
         // Como o navio está de perfil ou de frente, vamos usar uma margem generosa para a aula
-        const larguraNavio = 340;  // Metros (Eixo X - desvio lateral)
-        const comprimentoNavio = 100; // Metros (Eixo Z - alcance)
+        const larguraNavio = 830;  // Metros (Eixo X - desvio lateral)
+        const comprimentoNavio = 2000; // Metros (Eixo Z - alcance)
 
         let acerto = Math.abs(erroX) < larguraNavio && Math.abs(erroZ) < comprimentoNavio;
 
