@@ -89,17 +89,30 @@ if (btnDisparar) {
 let trajetoriaAtual = null;
 let projetilAtual = null;
 let ultimoImpacto = null;
+let tiroAtualId = null;
 
 
 socket.on('animarTiro', (dados) => {
 
+    if (!minhaEquipe) return;
+
+    const alerta = document.getElementById('alerta-radar');
+
+
+     // IGNORA tiros que não são seus
+    if (dados.equipe !== minhaEquipe) return;
     if (trajetoriaAtual) scene.remove(trajetoriaAtual);
     if (projetilAtual) scene.remove(projetilAtual);
 
+      //  BLOQUEIA BOTÃO
+    if (btnDisparar) btnDisparar.disabled = true;
+
+    tiroAtualId = dados.id;
+
     tiroEmAndamento = true;
-    ultimoImpacto = null; //  
-
-
+    ultimoImpacto = null; // 
+    
+    
     setTextoComFade(
         document.getElementById('resultado-impacto'),
         "🚀 PROJÉTIL EM VOO..."
@@ -127,6 +140,9 @@ socket.on('animarTiro', (dados) => {
             clearInterval(anim);
             tiroEmAndamento = false;
 
+            //  LIBERA BOTÃO
+            if (btnDisparar) btnDisparar.disabled = false;
+
             if (ultimoImpacto) {
                 mostrarImpacto(ultimoImpacto);
             }
@@ -152,28 +168,40 @@ socket.on('animarTiro', (dados) => {
 });
 
 
-socket.on('impacto', ({ impacto }) => {
+socket.on('impacto', ({ id, impacto }) => {
 
-       ultimoImpacto = impacto;
+      
+    if (!id) return;
+    
+    const fuiAtacado = impacto.equipeAtiradora !== minhaEquipe;
 
-    // 🔥 se o tiro já terminou, mostra imediatamente
-    if (!tiroEmAndamento) {
-        mostrarImpacto(impacto);
+    if (fuiAtacado) {
+         const tempoSimulado = 15000; // ajuste conforme sua animação
+
+        setTimeout(() => {
+            mostrarImpacto(impacto, true);
+        }, tempoSimulado);
+        return;
     }
-     
-});
+
+    ultimoImpacto = impacto;
+
+    if (!tiroEmAndamento) {
+        mostrarImpacto(impacto, false);
+    }
+        
+    });
 
 
-function mostrarImpacto(impacto) {
+function mostrarImpacto(impacto, foiAtacado) {
 
     const alerta = document.getElementById('alerta-radar');
     const resultado = document.getElementById('resultado-impacto');
 
+
     if (!alerta || !resultado) return;
 
-    const fuiAtacado = impacto.equipeAtiradora !== minhaEquipe;
-
-    if (fuiAtacado) {
+    if (foiAtacado) {
 
         const distancia = Math.sqrt(
             impacto.erroX**2 + impacto.erroZ**2
@@ -181,11 +209,11 @@ function mostrarImpacto(impacto) {
 
         alerta.innerHTML = impacto.acerto
             ? "💥 IMPACTO DIRETO!"
-            : `⚠️ IMPACTO INIMIGO (${(distancia/1000).toFixed(2)} km)`;
+            : `🌊 Impacto (${(distancia/1000).toFixed(2)} km)`;
 
         alerta.style.color = "red";
 
-        setTimeout(() => alerta.innerHTML = "", 4000);
+        setTimeout(() => alerta.innerHTML = "", 25000);
     }
     else {
 

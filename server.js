@@ -3,6 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const { calcularTrajetoria } = require('./balistica.js');
+const tiroId = Date.now();
 
 const app = express();
 const server = http.createServer(app);
@@ -141,12 +142,14 @@ io.on('connection', (socket) => {
 
         // 7. Envia o relatório de impacto para quem atirou
         io.to(`equipe_${socket.equipe}`).emit('animarTiro', {
+            id: tiroId,
             equipe: socket.equipe,
             caminho: trajetoria
         });
 
 
         io.emit('impacto', {
+            id: tiroId,
             impacto: {
                 x: impacto.x,
                 z: impacto.z,
